@@ -4,8 +4,135 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Upload, FolderPlus, Users, Image } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+interface Album {
+  id: string;
+  couple_names: string;
+}
 
 const Admin = () => {
+  const { toast } = useToast();
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [coupleNames, setCoupleNames] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [coverPhoto, setCoverPhoto] = useState<File | null>(null);
+  const [selectedAlbumId, setSelectedAlbumId] = useState("");
+  const [uploadPhotos, setUploadPhotos] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const coverPhotoInputRef = useRef<HTMLInputElement>(null);
+  const photosInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
+
+  const fetchAlbums = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('albums')
+        .select('id, couple_names')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAlbums(data || []);
+    } catch (error) {
+      console.error('Error fetching albums:', error);
+    }
+  };
+
+  const handleCreateAlbum = async () => {
+    if (!coupleNames || !eventDate || !coverPhoto) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all fields and select a cover photo",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const accessCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const formData = new FormData();
+      formData.append('action', 'create_album');
+      formData.append('coupleNames', coupleNames);
+      formData.append('eventDate', eventDate);
+      formData.append('coverPhoto', coverPhoto);
+      formData.append('accessCode', accessCode);
+
+      const { data, error } = await supabase.functions.invoke('google-drive-upload', {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Album Created",
+        description: `Album created successfully! Access code: ${accessCode}`,
+      });
+
+      setCoupleNames("");
+      setEventDate("");
+      setCoverPhoto(null);
+      if (coverPhotoInputRef.current) coverPhotoInputRef.current.value = "";
+      fetchAlbums(); // Refresh albums list
+    } catch (error: any) {
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to create album",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleUploadPhotos = async () => {
+    if (!selectedAlbumId || uploadPhotos.length === 0) {
+      toast({
+        title: "Missing Information",
+        description: "Please select an album and photos to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('action', 'upload_photos');
+      formData.append('albumId', selectedAlbumId);
+      uploadPhotos.forEach(photo => {
+        formData.append('photos', photo);
+      });
+
+      const { data, error } = await supabase.functions.invoke('google-drive-upload', {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Photos Uploaded",
+        description: `Successfully uploaded ${uploadPhotos.length} photos`,
+      });
+
+      setUploadPhotos([]);
+      if (photosInputRef.current) photosInputRef.current.value = "";
+    } catch (error: any) {
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload photos",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       {/* Navigation */}
@@ -97,24 +224,48 @@ const Admin = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Couple Names</Label>
-                  <Input placeholder="e.g., Sarah & James" />
+                  <Input 
+                    placeholder="e.g., Sarah & James" 
+                    value={coupleNames}
+                    onChange={(e) => setCoupleNames(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Event Date</Label>
-                  <Input type="date" />
+                  <Input 
+                    type="date" 
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Cover Photo</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer">
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <input
+                    ref={coverPhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setCoverPhoto(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="cover-photo-input"
+                  />
+                  <label 
+                    htmlFor="cover-photo-input"
+                    className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer flex flex-col items-center"
+                  >
+                    <Upload className="h-8 w-8 mb-2 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
-                      Click to upload cover photo
+                      {coverPhoto ? coverPhoto.name : "Click to upload cover photo"}
                     </p>
-                  </div>
+                  </label>
                 </div>
-                <Button className="w-full" size="lg">
+                <Button 
+                  className="w-full" 
+                  size="lg" 
+                  onClick={handleCreateAlbum}
+                  disabled={isUploading}
+                >
                   <FolderPlus className="mr-2 h-5 w-5" />
-                  Create Album
+                  {isUploading ? "Creating..." : "Create Album"}
                 </Button>
               </div>
             </Card>
@@ -126,24 +277,49 @@ const Admin = () => {
                 <div className="space-y-2">
                   <Label>Select Album</Label>
                   <select className="w-full rounded-lg border border-input bg-background px-3 py-2">
-                    <option>Sarah & James Wedding</option>
-                    <option>Emma & Michael Wedding</option>
-                    <option>Lisa & David Wedding</option>
+                    <option value="">Select an album...</option>
+                    {albums.map((album) => (
+                      <option key={album.id} value={album.id}>
+                        {album.couple_names}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Photos</Label>
-                  <div className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary transition-colors cursor-pointer">
-                    <Image className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                    <p className="font-medium mb-1">Drop photos here or click to browse</p>
+                  <input
+                    ref={photosInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => setUploadPhotos(Array.from(e.target.files || []))}
+                    className="hidden"
+                    id="photos-input"
+                  />
+                  <label 
+                    htmlFor="photos-input"
+                    className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary transition-colors cursor-pointer flex flex-col items-center"
+                  >
+                    <Image className="h-12 w-12 mb-3 text-muted-foreground" />
+                    <p className="font-medium mb-1">
+                      {uploadPhotos.length > 0 
+                        ? `${uploadPhotos.length} photos selected` 
+                        : "Drop photos here or click to browse"
+                      }
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       Supports JPG, PNG • Max 50 files at once
                     </p>
-                  </div>
+                  </label>
                 </div>
-                <Button className="w-full" size="lg">
+                <Button 
+                  className="w-full" 
+                  size="lg"
+                  onClick={handleUploadPhotos}
+                  disabled={isUploading}
+                >
                   <Upload className="mr-2 h-5 w-5" />
-                  Upload Photos
+                  {isUploading ? "Uploading..." : "Upload Photos"}
                 </Button>
               </div>
             </Card>
@@ -156,10 +332,17 @@ const Admin = () => {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Select Album</Label>
-                  <select className="w-full rounded-lg border border-input bg-background px-3 py-2">
-                    <option>Sarah & James Wedding</option>
-                    <option>Emma & Michael Wedding</option>
-                    <option>Lisa & David Wedding</option>
+                  <select 
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2"
+                    value={selectedAlbumId}
+                    onChange={(e) => setSelectedAlbumId(e.target.value)}
+                  >
+                    <option value="">Select an album...</option>
+                    {albums.map((album) => (
+                      <option key={album.id} value={album.id}>
+                        {album.couple_names}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-2">
