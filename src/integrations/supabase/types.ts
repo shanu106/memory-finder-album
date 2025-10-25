@@ -14,7 +14,112 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      album_access: {
+        Row: {
+          album_id: string
+          granted_at: string
+          id: string
+          user_email: string
+        }
+        Insert: {
+          album_id: string
+          granted_at?: string
+          id?: string
+          user_email: string
+        }
+        Update: {
+          album_id?: string
+          granted_at?: string
+          id?: string
+          user_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_access_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "albums"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      albums: {
+        Row: {
+          access_code: string | null
+          couple_names: string
+          cover_photo_drive_id: string | null
+          cover_photo_url: string | null
+          created_at: string
+          created_by: string | null
+          drive_folder_id: string | null
+          event_date: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          access_code?: string | null
+          couple_names: string
+          cover_photo_drive_id?: string | null
+          cover_photo_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          drive_folder_id?: string | null
+          event_date: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          access_code?: string | null
+          couple_names?: string
+          cover_photo_drive_id?: string | null
+          cover_photo_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          drive_folder_id?: string | null
+          event_date?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      photos: {
+        Row: {
+          album_id: string
+          drive_file_id: string
+          drive_file_url: string
+          file_name: string
+          id: string
+          thumbnail_url: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          album_id: string
+          drive_file_id: string
+          drive_file_url: string
+          file_name: string
+          id?: string
+          thumbnail_url?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          album_id?: string
+          drive_file_id?: string
+          drive_file_url?: string
+          file_name?: string
+          id?: string
+          thumbnail_url?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photos_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "albums"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
